@@ -1,0 +1,26 @@
+[project]
+name = "hydrant"
+version = "0.1.0"
+description = "The agent context layer that learns. Built on HydraDB."
+requires-python = ">=3.10"
+dependencies = [
+  "neo4j>=5.20",
+  "snowballstemmer>=2.2",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "mcp>=1.12,<2",
+  "tiktoken>=0.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["hydrant"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

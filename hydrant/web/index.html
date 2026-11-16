@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hydrant: context on tap for agents</title>
+<meta name="description" content="Hydrant keeps every MCP tool definition in a HydraDB graph and hands an agent only the tools a task needs. It gets sharper with every task.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2F5F7; --panel:#FFFFFF; --ink:#10283A; --slate:#5C7080; --line:#D3DCE3;
+  --red:#D4372C; --water:#2377B0; --brass:#B9820F; --wash:#E6EEF3;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
+  --body:"Instrument Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--body)}
+a{color:var(--water)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--water);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0}
+.brand{display:flex;align-items:center;gap:10px;font:700 22px/1 var(--display);letter-spacing:-.01em}
+.brand svg{flex:none}
+.status{font-size:14px;color:var(--slate);display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:#9AA9B5}
+.dot.ok{background:#1E9E62}
+.dot.bad{background:var(--red)}
+h1{font:700 clamp(34px,5.2vw,62px)/1.02 var(--display);letter-spacing:-.025em;margin:26px 0 14px;max-width:17ch}
+.lede{font-size:19px;max-width:62ch;margin:0 0 30px;color:#2A4254}
+h2{font:700 30px/1.1 var(--display);letter-spacing:-.015em;margin:0 0 8px}
+h3{font:600 17px/1.3 var(--body);margin:0 0 10px}
+section{padding:54px 0;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:0}
+.sub{color:var(--slate);max-width:70ch;margin:0 0 22px}
+
+.ask{display:flex;gap:10px;align-items:stretch}
+.ask input{flex:1;min-width:0;padding:16px 18px;border:2px solid var(--ink);border-radius:10px;background:var(--panel);font-size:18px}
+.btn{border:0;border-radius:10px;padding:0 22px;min-height:44px;background:var(--red);color:#fff;font-weight:600;cursor:pointer}
+.btn:hover{background:#B92C22}
+.btn.quiet{background:var(--panel);color:var(--ink);border:1.5px solid var(--ink)}
+.btn.quiet:hover{background:var(--wash)}
+.btn:disabled{opacity:.5;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 13px;font-size:14px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--ink)}
+
+.scale{margin:30px 0 0;display:none}
+.scale .bar{position:relative;height:34px;background:repeating-linear-gradient(90deg,#DCE5EB 0 2px,#E9EFF3 2px 9px);border-radius:6px;overflow:hidden}
+.scale .fill{position:absolute;inset:0 auto 0 0;background:var(--red);min-width:3px;transition:width .5s ease}
+.scale .nums{display:flex;justify-content:space-between;gap:16px;margin-top:8px;font-size:15px}
+.scale .nums b{font:700 22px/1 var(--display)}
+.scale .nums .right{text-align:right;color:var(--slate)}
+
+.bench{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:26px;margin-top:26px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+.empty{color:var(--slate);padding:26px 4px}
+.tool{display:grid;grid-template-columns:22px 1fr auto;gap:4px 10px;padding:11px 0;border-top:1px solid var(--line)}
+.tool:first-of-type{border-top:0}
+.tool input{margin:4px 0 0;width:16px;height:16px;accent-color:var(--red)}
+.tool .key{font:500 14.5px/1.35 var(--mono);word-break:break-word}
+.tool .key .srv{color:var(--slate)}
+.tool .why{grid-column:2/4;font-size:13.5px;color:var(--slate)}
+.tool .tok{font-size:13px;color:var(--slate);white-space:nowrap}
+.role{display:inline-block;font-size:12px;font-weight:600;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+.role.prereq{background:#FBE4E1;color:#9C2118}
+.role.workflow{background:#F6E9C9;color:#7A560A}
+.ent{font-size:14px;padding:9px 12px;border-radius:8px;background:#F6E9C9;color:#5B4108;margin-top:10px}
+.ent code,.diff code,td code,.learned code{font:500 13px var(--mono)}
+.meta{font-size:13.5px;color:var(--slate);margin:0 0 8px}
+svg.trace{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--slate);margin-top:10px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+
+.report{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.report .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.report input[type=text]{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);min-width:0}
+.report details{margin-top:10px;font-size:14px}
+.report details .row{margin-top:8px}
+.sugg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.diff{margin-top:14px;font-size:14.5px}
+.diff ul{margin:6px 0 0;padding-left:20px}
+.diff li{margin:2px 0}
+.up{color:#17784B}.down{color:#9C2118}
+
+.live{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:26px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px}
+.learned h3{margin-top:18px}
+.learned h3:first-child{margin-top:0}
+.learned ul{list-style:none;margin:0;padding:0;font-size:14px}
+.learned li{padding:4px 0;border-top:1px solid var(--line)}
+.learned li:first-child{border-top:0}
+.note{font-size:14px;color:var(--slate)}
+
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:right;padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+th:first-child,td:first-child{text-align:left}
+thead th{border-top:0;font-weight:600;color:var(--slate);font-size:14px}
+tr.us td{font-weight:600;background:#FFF7F5}
+tr.ab td:first-child{padding-left:28px;color:var(--slate)}
+td small{display:block;color:var(--slate);font-weight:400}
+.tablewrap{overflow-x:auto}
+pre{background:var(--ink);color:#E8F0F5;border-radius:10px;padding:16px 18px;overflow-x:auto;font:400 13.5px/1.55 var(--mono);margin:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.model{font:400 14px/1.9 var(--mono);white-space:pre;overflow-x:auto}
+.model b{color:var(--red);font-weight:500}.model em{color:var(--brass);font-style:normal}
+footer{padding:30px 0 60px;color:var(--slate);font-size:14px;border-top:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:15px;display:none;max-width:90vw;z-index:5}
+@media (max-width:900px){.bench,.live,.two{grid-template-columns:1fr}.ask{flex-direction:column}.btn{min-height:50px}}
+@media (prefers-reduced-motion:reduce){.scale .fill{transition:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M8 5a5 5 0 0 1 10 0v2h2v4h-2v3h4a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4v5h3v4H5v-4h3v-5H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h4v-3H6V7h2z" fill="#D4372C"/><circle cx="13" cy="17.5" r="2.6" fill="#F2F5F7"/></svg>
+    Hydrant
+  </div>
+  <div class="status"><span class="dot" id="dot"></span><span id="status">Connecting to HydraDB</span></div>
+</header>
+
+<section class="first">
+  <h1>Your agent reads <span id="h-pre">166,025</span> tokens of tools before it reads the task.</h1>
+  <p class="lede">Hydrant keeps every MCP tool definition in a HydraDB graph and hands the agent only what the task needs: the tools, the lookups those tools depend on, and the entities it has already resolved. Every finished task rewrites a little of the graph, so the next answer is sharper.</p>
+  <form class="ask" id="ask">
+    <input id="task" aria-label="Task" placeholder="Describe a task, e.g. merge the open PR for dark mode on acme/web" autocomplete="off">
+    <button class="btn" type="submit">Find tools</button>
+  </form>
+  <div class="chips" id="chips"></div>
+
+  <div class="scale" id="scale">
+    <div class="bar" role="img" aria-label="Context size compared with preloading every tool"><div class="fill" id="fill"></div></div>
+    <div class="nums"><div><b id="s-tok">0</b> tokens handed to the agent, <span id="s-tools">0</span> tools, <span id="s-ms">0</span> ms, <span id="s-q">0</span> graph queries</div><div class="right"><span id="s-pre">0</span> tokens if every tool is preloaded<br><span id="s-pct"></span></div></div>
+  </div>
+
+  <div class="bench" id="result" hidden>
+    <div class="panel">
+      <h3>What the agent gets</h3>
+      <div id="tools"></div>
+      <div id="ents"></div>
+      <div class="report" id="report">
+        <h3>Report what the task actually used</h3>
+        <p class="meta">Tick the tools that were called. Add any tool that was needed but missing. Hydrant learns from the difference.</p>
+        <div class="row">
+          <input type="text" id="miss" placeholder="Search for a missing tool" aria-label="Search for a missing tool">
+          <button class="btn" id="send" type="button">Report outcome</button>
+        </div>
+        <div class="sugg" id="sugg"></div>
+        <details>
+          <summary>The task resolved a named thing (a channel, a page, a project)</summary>
+          <div class="row">
+            <input type="text" id="e-server" placeholder="server, e.g. slack" size="12" aria-label="Entity server">
+            <input type="text" id="e-kind" placeholder="kind, e.g. channel" size="12" aria-label="Entity kind">
+            <input type="text" id="e-name" placeholder="name, e.g. releases" size="14" aria-label="Entity name">
+            <input type="text" id="e-ref" placeholder="id, e.g. C04REL9K2" size="14" aria-label="Entity id">
+          </div>
+        </details>
+        <div class="diff" id="diff"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>The walk through the graph</h3>
+      <p class="meta" id="tmeta"></p>
+      <svg class="trace" id="trace" role="img" aria-label="Graph traversal from the task's words to tools"></svg>
+      <div class="legend">
+        <span><i style="background:#2377B0"></i>word mentions tool</span>
+        <span><i style="background:#B9820F"></i>learned: alias, workflow, entity</span>
+        <span><i style="background:#D4372C"></i>needs, then lookup</span>
+        <span><i style="background:#8FA1AE"></i>server</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="learn">
+  <h2>It learns from use</h2>
+  <p class="sub">Replay recorded agent usage against this running graph and watch the held-out score move. The held-out tasks are never used for learning. The blue line is the published benchmark on HydraDB; the red points are this instance, right now.</p>
+  <div class="live">
+    <div class="panel">
+      <div class="controls">
+        <button class="btn" id="replay" type="button">Replay 50 tasks of usage</button>
+        <button class="btn quiet" id="evalnow" type="button">Evaluate held-out set</button>
+        <button class="btn quiet" id="reset" type="button">Reset graph</button>
+      </div>
+      <svg id="chart" viewBox="0 0 720 330" style="width:100%;height:auto" role="img" aria-label="Complete-context rate on held-out tasks as usage accumulates"></svg>
+      <p class="note" id="livenote"></p>
+    </div>
+    <div class="panel learned" id="learned"><p class="empty">Nothing learned yet. Replay some usage or report an outcome above.</p></div>
+  </div>
+</section>
+
+<section id="measured">
+  <h2>Measured on HydraDB</h2>
+  <p class="sub" id="benchsub">Benchmark results load here once bench/results/learning.json exists.</p>
+  <div class="panel tablewrap"><table id="btable"></table></div>
+  <p class="note" id="benchnote" style="margin-top:14px"></p>
+</section>
+
+<section id="connect">
+  <h2>Connect an agent</h2>
+  <p class="sub">Hydrant is one MCP server with three tools. The agent asks for what a task needs, calls it, and reports what it used.</p>
+  <div class="two">
+    <div><h3>MCP client config</h3><pre id="mcpconf"></pre></div>
+    <div><h3>Or plain HTTP</h3><pre id="curl"></pre></div>
+  </div>
+</section>
+
+<section id="model">
+  <h2>What lives in the graph</h2>
+  <p class="sub">Black edges come from the tool definitions at ingest. <span style="color:var(--brass)">Brass</span> edges and weights are written by the learning loop. <span id="counts"></span></p>
+  <div class="panel model" id="modelbox">(Server)-[:PROVIDES]->(Tool)
+(Term)-[:MENTIONS {<em>w</em>}]->(Tool)            a word points at a tool; <em>weights move with every outcome</em>
+(Term)-[:NAMES]->(Server)                   "slack", "github" <em>and learned ones: "pod" names kubernetes</em>
+(Tool)-[:NEEDS]->(Resource)                 slack_post_message needs a channel id
+(Resource)-[:YIELDED_BY {<em>w</em>}]->(Tool)      slack_list_channels can look one up
+<em>(Term)-[:MEANS]->(Term)                     learned alias: "pr" means "pull_request"
+(Tool)-[:THEN]->(Tool)                      learned workflow: search_issues, then add_issue_comment
+(Term)-[:DENOTES]->(Entity)                 learned: "releases" is channel C04REL9K2
+(Resource)-[:HOLDS]->(Entity)</em></div>
+</section>
+
+<footer>Built on <a href="https://github.com/hydra-db/hydradb">HydraDB</a>, the open-source graph engine. Tool definitions are real, harvested from 27 public MCP servers.</footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let current = null, extra = [], bench = null, liveState = null;
+
+async function api(path, body, method) {
+  const r = await fetch(path, body !== undefined ? {method: method || "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)} : {method: method || "GET"});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || ("Request failed with status " + r.status));
+  return data;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 4200); }
+
+async function loadStats() {
+  try {
+    const s = await api("/api/stats");
+    const edges = s.edges;
+    $("dot").className = "dot ok";
+    $("status").textContent = `HydraDB connected: ${fmt(s.nodes.Tool)} tools, ${fmt(s.nodes.Term)} terms, ${fmt(edges)} edges`;
+    $("h-pre").textContent = fmt(s.preload_tokens);
+    $("counts").textContent = `So far this graph has learned from ${fmt(s.learned.outcomes)} outcomes: ${fmt(s.learned.reweighted_edges)} edge weights moved, ${fmt(s.learned.new_words)} new words, ${fmt(s.learned.aliases)} aliases, ${fmt(s.learned.workflows)} workflows, ${fmt(s.learned.entities)} entities.`;
+  } catch (e) { $("dot").className = "dot bad"; $("status").textContent = "HydraDB is not reachable: " + e.message; }
+}
+
+function why(t) {
+  const parts = [];
+  const lex = t.via.filter(v => v.term && !v.term.includes("_")).sort((a, b) => b.score - a.score).slice(0, 3);
+  if (lex.length) parts.push("words: " + lex.map(v => v.alias ? `${v.term} (means ${v.alias})` : v.term).join(", "));
+  t.via.forEach(v => {
+    if (v.server && v.server !== true) parts.push(`the task names ${v.server}`);
+    if (v.needs) parts.push(`${v.for.split("/")[1]} needs a ${String(v.needs).split(":")[1] || v.needs}; this looks one up`);
+    if (v.after) parts.push(`used after ${v.after.split("/")[1]} ${v.seen} time${v.seen == 1 ? "" : "s"}`);
+  });
+  return parts.join("; ");
+}
+
+function renderTools() {
+  const c = current;
+  if (!c.tools.length) {
+    $("tools").innerHTML = `<p class="empty">No tool matched these words${c.stats.terms_unknown.length ? " (never seen: " + esc(c.stats.terms_unknown.filter(t => !t.includes("_")).join(", ")) + ")" : ""}. Search for the tool that should have come back below and report it. Hydrant will learn the words.</p>`;
+  } else {
+    $("tools").innerHTML = c.tools.map((t, i) => `
+      <label class="tool"><input type="checkbox" data-key="${esc(t.key)}" ${i === 0 ? "checked" : ""}>
+        <span class="key"><span class="srv">${esc(t.server)}/</span>${esc(t.name)}${t.role !== "seed" ? `<span class="role ${t.role}">${t.role === "prereq" ? "lookup" : "workflow"}</span>` : ""}</span>
+        <span class="tok">${fmt(t.tokens)} tok</span>
+        <span class="why">${esc(why(t))}</span></label>`).join("");
+  }
+  $("ents").innerHTML = c.entities.map(e => `<div class="ent">Already resolved: ${esc(e.kind)} <b>${esc(e.name)}</b> is <code>${esc(e.ref)}</code>. No lookup call needed.</div>`).join("");
+  renderExtra();
+}
+function renderExtra() {
+  $("sugg").innerHTML = extra.map(k => `<button class="chip" type="button" data-rm="${esc(k)}">${esc(k)} ✕</button>`).join("");
+}
+
+function renderTrace(tr) {
+  const svg = $("trace");
+  const col = n => n.kind === "term" ? 0 : (n.kind === "alias" || n.kind === "server" || n.kind === "entity") ? 1 : n.kind === "resource" ? 3 : (n.role === "seed" ? 2 : 4);
+  const cols = [[], [], [], [], []];
+  tr.nodes.forEach(n => cols[col(n)].push(n));
+  const used = cols.map((c, i) => c.length ? i : -1).filter(i => i >= 0);
+  const W = 760, rowH = 34, padY = 18;
+  const H = Math.max(120, Math.max(...cols.map(c => c.length)) * rowH + padY * 2);
+  const widths = {0: 96, 1: 120, 2: 210, 3: 120, 4: 190};
+  const total = used.reduce((a, i) => a + widths[i], 0), gap = used.length > 1 ? (W - total) / (used.length - 1) : 0;
+  const pos = {}; let x = 0;
+  used.forEach(i => {
+    const c = cols[i], off = (H - c.length * rowH) / 2;
+    c.forEach((n, j) => pos[n.id] = {x, y: off + j * rowH + rowH / 2, w: widths[i], n});
+    x += widths[i] + gap;
+  });
+  const color = {MENTIONS: "#2377B0", MEANS: "#B9820F", THEN: "#B9820F", DENOTES: "#B9820F", NEEDS: "#D4372C", YIELDED_BY: "#D4372C", NAMES: "#8FA1AE", PROVIDES: "#8FA1AE"};
+  let out = "";
+  tr.edges.forEach(e => {
+    const a = pos[e.from], b = pos[e.to]; if (!a || !b) return;
+    const back = a.x >= b.x;
+    const x1 = back ? a.x + a.w / 2 : a.x + a.w, x2 = back ? b.x + b.w / 2 : b.x, y1 = a.y, y2 = b.y;
+    const sw = e.type === "MENTIONS" ? Math.min(4, 1 + (e.w || 0) / 1.5) : 1.8;
+    const d = back ? `M${x1},${y1 - 12} C${x1},${Math.min(y1, y2) - 40} ${x2},${Math.min(y1, y2) - 40} ${x2},${y2 - 12}` : `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
+    out += `<path d="${d}" fill="none" stroke="${color[e.type]}" stroke-width="${sw}" opacity=".75"${e.type === "MEANS" || e.type === "THEN" || e.type === "DENOTES" ? ' stroke-dasharray="5 4"' : ""}><title>${e.type}${e.w != null ? " " + e.w : ""}</title></path>`;
+  });
+  Object.values(pos).forEach(p => {
+    const n = p.n, k = n.kind;
+    const fill = k === "tool" ? (n.role === "seed" ? "#10283A" : n.role === "prereq" ? "#D4372C" : "#B9820F") : k === "term" ? "#E6EEF3" : k === "resource" ? "#FBE4E1" : k === "server" ? "#DDE4E9" : "#F6E9C9";
+    const fg = k === "tool" ? "#fff" : "#10283A";
+    let label = k === "tool" ? n.name : k === "resource" ? n.label.split(":")[1] + " id" : k === "entity" ? n.name + " = " + n.ref : n.label;
+    const max = Math.floor(p.w / 7.1); if (label.length > max) label = label.slice(0, max - 1) + "…";
+    out += `<g><title>${esc(n.label)}</title><rect x="${p.x}" y="${p.y - 13}" width="${p.w}" height="26" rx="${k === "tool" ? 6 : 13}" fill="${fill}"/><text x="${p.x + p.w / 2}" y="${p.y + 4.5}" text-anchor="middle" font-size="12.5" font-family="JetBrains Mono, monospace" fill="${fg}">${esc(label)}</text></g>`;
+  });
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = out || `<text x="20" y="40" font-size="14" fill="#5C7080">No path found.</text>`;
+}
+
+async function resolve(task) {
+  if (!task.trim()) { toast("Type a task first."); return; }
+  try {
+    const c = await api("/api/resolve", {task});
+    current = c; extra = [];
+    const pre = c.compare.preload_tokens, pct = c.tokens / pre * 100;
+    $("scale").style.display = "block"; $("result").hidden = false;
+    $("fill").style.width = Math.max(.2, pct) + "%";
+    $("s-tok").textContent = fmt(c.tokens); $("s-tools").textContent = c.tools.length; $("s-ms").textContent = Math.round(c.stats.ms); $("s-q").textContent = c.stats.queries;
+    $("s-pre").textContent = fmt(pre); $("s-pct").textContent = c.tokens ? `this context is ${(100 - pct).toFixed(1)}% smaller` : "";
+    $("tmeta").textContent = `${c.stats.terms_known.length} of the task's words are in the graph` + (c.stats.terms_unknown.filter(t => !t.includes("_")).length ? `; never seen: ${c.stats.terms_unknown.filter(t => !t.includes("_")).join(", ")}` : "");
+    $("diff").innerHTML = "";
+    renderTools(); renderTrace(c.trace);
+  } catch (e) { toast(e.message); }
+}
+
+$("ask").addEventListener("submit", ev => { ev.preventDefault(); resolve($("task").value); });
+$("chips").addEventListener("click", ev => { const b = ev.target.closest(".chip"); if (b) { $("task").value = b.textContent; resolve(b.textContent); } });
+$("sugg").addEventListener("click", ev => {
+  const add = ev.target.closest("[data-add]"), rm = ev.target.closest("[data-rm]");
+  if (add && !extra.includes(add.dataset.add)) { extra.push(add.dataset.add); $("miss").value = ""; renderExtra(); }
+  if (rm) { extra = extra.filter(k => k !== rm.dataset.rm); renderExtra(); }
+});
+let missTimer;
+$("miss").addEventListener("input", () => {
+  clearTimeout(missTimer);
+  missTimer = setTimeout(async () => {
+    const q = $("miss").value.trim(); if (q.length < 2) { renderExtra(); return; }
+    const r = await api("/api/tools?limit=8&q=" + encodeURIComponent(q));
+    $("sugg").innerHTML = extra.map(k => `<button class="chip" type="button" data-rm="${esc(k)}">${esc(k)} ✕</button>`).join("") +
+      r.tools.filter(t => !extra.includes(t.key)).map(t => `<button class="chip" type="button" data-add="${esc(t.key)}">Add ${esc(t.key)}</button>`).join("");
+  }, 180);
+});
+
+$("send").addEventListener("click", async () => {
+  if (!current) return;
+  const used = [...document.querySelectorAll("#tools input:checked")].map(i => i.dataset.key).concat(extra);
+  if (!used.length) { toast("Tick at least one tool, or add the one that was missing."); return; }
+  const ent = ["server", "kind", "name", "ref"].map(k => $("e-" + k).value.trim());
+  const entities = ent.every(Boolean) ? [{server: ent[0], kind: ent[1], name: ent[2], ref: ent[3]}] : [];
+  if (ent.some(Boolean) && !entities.length) { toast("Fill all four entity fields, or leave them all empty."); return; }
+  try {
+    const d = await api("/api/feedback", {context_id: current.context_id, used, entities});
+    const li = [];
+    d.new_terms.filter(t => !t.includes("_")).slice(0, 8).forEach(t => li.push(`New word in the graph: <code>${esc(t)}</code>`));
+    d.reinforced.filter(r => !r.term.includes("_")).slice(0, 8).forEach(r => li.push(`<span class="up">Strengthened</span> <code>${esc(r.term)}</code> to <code>${esc(r.tool)}</code>: ${r.from} to ${r.to}`));
+    d.decayed.filter(r => !r.term.includes("_")).slice(0, 5).forEach(r => li.push(`<span class="down">Weakened</span> <code>${esc(r.term)}</code> to <code>${esc(r.tool)}</code>: ${r.from} to ${r.to}`));
+    d.workflows.forEach(w => li.push(`Workflow edge: <code>${esc(w.from)}</code> then <code>${esc(w.to)}</code>, seen ${w.seen} time${w.seen == 1 ? "" : "s"}`));
+    d.lookups.forEach(l => li.push(`Lookup weight for <code>${esc(l.tool)}</code> is now ${l.weight}`));
+    d.entities.forEach(e => li.push(`Remembered entity <code>${esc(e.key)}</code> as <code>${esc(e.ref)}</code>`));
+    $("diff").innerHTML = li.length ? `<b>Reported. The graph changed:</b><ul>${li.map(x => `<li>${x}</li>`).join("")}</ul><p class="note">Run the same task again to see the difference.</p>` : `<b>Reported.</b> The right tools were already ranked first, so no weights moved.`;
+    loadStats(); loadLearned();
+  } catch (e) { toast(e.message); }
+});
+
+function drawChart() {
+  const svg = $("chart"), W = 720, H = 330, m = {l: 46, r: 150, t: 16, b: 40};
+  const curve = bench && bench.learning ? bench.learning.aggregate.curve : [];
+  const base = bench && bench.learning ? bench.learning.aggregate.baselines : null;
+  const live = liveState ? liveState.curve : [];
+  const maxX = Math.max(liveState ? liveState.total : 0, curve.length ? curve[curve.length - 1].seen : 0, 100);
+  const ys = [...curve.map(c => c.complete.mean - c.complete.sd), ...live.map(p => p.complete), base ? base.flat_top10.complete.mean : 60];
+  const minY = Math.max(0, Math.floor((Math.min(...ys) - 6) / 10) * 10), maxY = 100;
+  const X = v => m.l + (v / maxX) * (W - m.l - m.r), Y = v => m.t + (1 - (v - minY) / (maxY - minY)) * (H - m.t - m.b);
+  let o = "";
+  for (let y = minY; y <= maxY; y += 10) o += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(y)}" y2="${Y(y)}" stroke="#E1E8ED"/><text x="${m.l - 8}" y="${Y(y) + 4}" text-anchor="end" font-size="12" fill="#5C7080">${y}%</text>`;
+  for (let x = 0; x <= maxX; x += 100) o += `<text x="${X(x)}" y="${H - m.b + 18}" text-anchor="middle" font-size="12" fill="#5C7080">${x}</text>`;
+  o += `<text x="${(m.l + W - m.r) / 2}" y="${H - 4}" text-anchor="middle" font-size="12.5" fill="#5C7080">tasks of usage the graph has learned from</text>`;
+  if (base) [["flat_top10", "flat index, top 10"], ["flat_top20", "flat index, top 20"]].forEach(([k, label]) => {
+    const y = Y(base[k].complete.mean);
+    o += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="#8FA1AE" stroke-dasharray="4 4"/><text x="${W - m.r + 8}" y="${y + 4}" font-size="12.5" fill="#5C7080">${label}: ${base[k].complete.mean.toFixed(0)}%</text>`;
+  });
+  if (curve.length) {
+    const up = curve.map(c => `${X(c.seen)},${Y(c.complete.mean + c.complete.sd)}`), dn = curve.slice().reverse().map(c => `${X(c.seen)},${Y(c.complete.mean - c.complete.sd)}`);
+    o += `<polygon points="${up.concat(dn).join(" ")}" fill="#2377B0" opacity=".14"/>`;
+    o += `<polyline points="${curve.map(c => `${X(c.seen)},${Y(c.complete.mean)}`).join(" ")}" fill="none" stroke="#2377B0" stroke-width="2.5"/>`;
+    const last = curve[curve.length - 1];
+    o += `<text x="${X(last.seen) + 8}" y="${Y(last.complete.mean) - 6}" font-size="12.5" fill="#2377B0" font-weight="600">benchmark: ${last.complete.mean.toFixed(0)}%</text><text x="${X(last.seen) + 8}" y="${Y(last.complete.mean) + 9}" font-size="11.5" fill="#2377B0">mean of ${bench.learning.seeds} splits</text>`;
+  }
+  if (live.length) {
+    o += `<polyline points="${live.map(p => `${X(p.seen)},${Y(p.complete)}`).join(" ")}" fill="none" stroke="#D4372C" stroke-width="2"/>`;
+    live.forEach(p => o += `<circle cx="${X(p.seen)}" cy="${Y(p.complete)}" r="4.5" fill="#D4372C"><title>${p.seen} tasks: ${p.complete}% complete, ${fmt(p.tokens)} tokens, p50 ${p.p50_ms} ms</title></circle>`);
+    const lp = live[live.length - 1];
+    o += `<text x="${X(lp.seen) + 9}" y="${Y(lp.complete) + 22}" font-size="12.5" fill="#D4372C" font-weight="600">this instance: ${lp.complete}%</text>`;
+  }
+  svg.innerHTML = o;
+  const lp = live[live.length - 1];
+  $("livenote").textContent = lp ? `This instance has learned from ${lp.seen} of ${liveState.total} recorded tasks. Held-out set (${lp.n} tasks): ${lp.complete}% complete contexts at ${fmt(lp.tokens)} tokens, p50 ${lp.p50_ms} ms, p95 ${lp.p95_ms} ms.` : "No live point yet. Evaluate the held-out set, or replay usage.";
+}
+async function loadLive() { try { liveState = await api("/api/live"); drawChart(); } catch (e) {} }
+async function longRun(btn, label, fn) {
+  const all = ["replay", "evalnow", "reset"].map($); const old = btn.textContent;
+  all.forEach(b => b.disabled = true); btn.textContent = label;
+  try { await fn(); } catch (e) { toast(e.message); }
+  all.forEach(b => b.disabled = false); btn.textContent = old;
+  loadStats(); loadLearned();
+}
+$("replay").addEventListener("click", () => longRun($("replay"), "Replaying and evaluating", async () => { liveState = await api("/api/live/replay", {n: 50}); drawChart(); if (liveState.seen >= liveState.total) toast("All recorded usage has been replayed. Reset the graph to start over."); }));
+$("evalnow").addEventListener("click", () => longRun($("evalnow"), "Evaluating", async () => { liveState = await api("/api/live/evaluate", {}); drawChart(); }));
+$("reset").addEventListener("click", () => { if (confirm("Reset the graph to the freshly ingested catalog? Everything learned is removed.")) longRun($("reset"), "Resetting", async () => { await api("/api/admin/reset", {}); liveState = await api("/api/live"); drawChart(); toast("Graph reset to the freshly ingested catalog."); }); });
+
+async function loadLearned() {
+  try {
+    const l = await api("/api/learned");
+    const parts = [];
+    if (l.aliases.length) parts.push(`<h3>Aliases</h3><ul>${l.aliases.slice(0, 7).map(a => `<li><code>${esc(a.word)}</code> means <code>${esc(a.means)}</code> <span class="note">seen ${a.seen} times</span></li>`).join("")}</ul>`);
+    if (l.words.length) parts.push(`<h3>New words</h3><ul>${l.words.slice(0, 7).map(w => `<li><code>${esc(w.word)}</code> points at <code>${esc(w.tool)}</code></li>`).join("")}</ul>`);
+    if (l.workflows.length) parts.push(`<h3>Workflows</h3><ul>${l.workflows.slice(0, 6).map(w => `<li><code>${esc((w.from || "").split("/")[1])}</code> then <code>${esc((w.to || "").split("/")[1])}</code> <span class="note">seen ${w.seen} times</span></li>`).join("")}</ul>`);
+    if (l.entities.length) parts.push(`<h3>Resolved entities</h3><ul>${l.entities.slice(0, 6).map(e => `<li>${esc(e.server)} ${esc(e.kind)} <b>${esc(e.name)}</b> is <code>${esc(e.ref)}</code></li>`).join("")}</ul>`);
+    $("learned").innerHTML = parts.length ? parts.join("") : `<p class="empty">Nothing learned yet. Replay some usage or report an outcome above.</p>`;
+  } catch (e) {}
+}
+
+function renderBench() {
+  if (!bench || !bench.learning) return;
+  const b = bench.learning, a = b.aggregate, base = a.baselines, c0 = a.curve[0], cN = a.curve[a.curve.length - 1], f = a.final;
+  const cell = (d, k, unit, dec) => d[k] ? `${d[k].mean.toFixed(dec)}${unit}<small>± ${d[k].sd.toFixed(dec)}</small>` : "";
+  const row = (cls, name, d) => `<tr class="${cls}"><td>${name}</td><td>${cell(d, "complete", "%", 1)}</td><td>${cell(d, "complete_multi", "%", 1)}</td><td>${d.tools.mean.toFixed(1)}</td><td>${fmt(Math.round(d.tokens.mean))}</td><td>${d.calls.mean.toFixed(2)}</td></tr>`;
+  $("btable").innerHTML = `<thead><tr><th>System</th><th>Complete context</th><th>Multi-tool tasks</th><th>Tools in context</th><th>Context tokens</th><th>Tool calls per task</th></tr></thead><tbody>` +
+    row("", "Preload every tool (what agents do today)", base.preload_all) + row("", "Flat index, top 5", base.flat_top5) + row("", "Flat index, top 10", base.flat_top10) + row("", "Flat index, top 20", base.flat_top20) +
+    row("", "Hydrant, before any usage", c0) + row("us", `Hydrant, after ${cN.seen} tasks of usage`, cN) +
+    row("ab", "same learned graph, read without traversal", f.no_traversal) + row("ab", "without requirement and workflow hops", f.no_requirement_workflow_hops) + row("ab", "without alias hops", f.no_alias_hops) + row("ab", "without entity memory", f.no_entity_memory) + `</tbody>`;
+  $("benchsub").textContent = `${b.tasks} hand-written tasks over ${fmt(base.preload_all.tools.mean)} real tool definitions, split at random into a usage stream and a held-out set, ${b.seeds} different splits. A context is complete when it holds every tool the task needs; one missing tool fails the task.`;
+  let note = `Mean ± standard deviation over ${b.seeds} splits. Token counts are estimated at 4 characters per token.`;
+  if (bench.load) { const l = bench.load.levels[bench.load.levels.length - 1]; note += ` Under load on HydraDB: ${l.concurrency} concurrent agents, ${l.rps} resolves per second, p50 ${l.p50_ms} ms, p99 ${l.p99_ms} ms, ${l.errors} errors.`; }
+  $("benchnote").textContent = note;
+}
+
+async function init() {
+  const origin = location.origin;
+  $("mcpconf").textContent = JSON.stringify({mcpServers: {hydrant: {type: "http", url: origin + "/mcp/"}}}, null, 2) + "\n\n# tools: find_tools, call_tool, report_outcome";
+  $("curl").textContent = `curl -s ${origin}/api/resolve \\\n  -H 'content-type: application/json' \\\n  -d '{"task": "merge the open PR for dark mode on acme/web"}'\n\ncurl -s ${origin}/api/feedback \\\n  -H 'content-type: application/json' \\\n  -d '{"context_id": "<id>", "used": ["github/merge_pull_request"]}'`;
+  loadStats(); loadLearned();
+  try { const ex = await api("/api/examples"); $("chips").innerHTML = ex.examples.slice(0, 6).map(t => `<button class="chip" type="button">${esc(t)}</button>`).join(""); } catch (e) {}
+  try { bench = await api("/api/bench"); renderBench(); } catch (e) {}
+  await loadLive();
+  const shared = new URLSearchParams(location.search).get("task");
+  if (shared) { $("task").value = shared; resolve(shared); }
+}
+init();
+</script>
+</body>
+</html>

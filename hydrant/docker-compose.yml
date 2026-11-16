@@ -1,0 +1,60 @@
+# Hydrant + a self-hosted HydraDB node and indexer, one command:  docker compose up -d --build
+#
+# HydraDB is built from the open-source engine (github.com/hydra-db/hydradb, Dockerfile target `runtime`).
+# The first build compiles the Rust engine and takes a while; later starts are instant.
+# If a published image exists for your platform you can skip the build:
+#   HYDRADB_IMAGE=ghcr.io/hydra-db/hydradb:<tag> docker compose up -d --no-build
+x-hydradb: &hydradb
+  image: ${HYDRADB_IMAGE:-hydradb-local:0.4.0}
+  build:
+    context: https://github.com/hydra-db/hydradb.git#main
+    target: runtime
+  restart: unless-stopped
+  environment: &hydradb-env
+    CLOUD_PROVIDER: local
+    LOCAL_PATH: /tmp/graph
+    GRAPH_DATA_PATH: data
+    GRAPH_NAMESPACE: default
+    GRAPH_ID: default
+    GRAPH_CELL_ID: cell-0
+    GRAPH_CELLS: cell-0
+    GRAPH_NODE_ID: node-0
+    GRAPH_BOLT_ADDR: 0.0.0.0:7687
+    GRAPH_HTTP_ADDR: 0.0.0.0:8443
+    GRAPH_ADMIN_ADDR: 0.0.0.0:9090
+    GRAPH_BOLT_NODE_ADDRESSES: node-0=hydradb:7687
+    GRAPH_ADVERTISED_BOLT_ADDR: hydradb:7687
+    GRAPH_INDEXER_ADMIN_ADDR: 0.0.0.0:9092
+    GRAPH_INDEXER_NOTIFY_URL: http://hydradb-indexer:9092/v1/changes:process
+    GRAPH_DATA_CACHE_DIR: /var/cache/slatedb
+    GRAPH_AUTH_TOKEN_FILE: /tmp/auth-token
+    GRAPH_ALLOW_PLAINTEXT: "true"
+    GRAPH_USAGE_REPORT_ENABLED: "false"
+    RUST_MIN_STACK: "33554432"
+    HYDRADB_TOKEN: ${HYDRADB_TOKEN:-local-development-token-32-bytes}
+  volumes:
+    - graph:/tmp/graph
+
+services:
+  hydradb:
+    <<: *hydradb
+    entrypoint: ["/bin/sh", "-c", "printf '%s\\n' \"$$HYDRADB_TOKEN\" > /tmp/auth-token && exec /usr/local/bin/graph-node"]
+
+  hydradb-indexer:
+    <<: *hydradb
+    entrypoint: ["/bin/sh", "-c", "printf '%s\\n' \"$$HYDRADB_TOKEN\" > /tmp/auth-token && exec /usr/local/bin/graph-indexer"]
+    depends_on: [hydradb]
+
+  hydrant:
+    build: .
+    restart: unless-stopped
+    depends_on: [hydradb]
+    environment:
+      HYDRADB_URI: bolt://hydradb:7687
+      HYDRADB_TOKEN: ${HYDRADB_TOKEN:-local-development-token-32-bytes}
+      HYDRANT_ADMIN_TOKEN: ${HYDRANT_ADMIN_TOKEN:-}
+    ports:
+      - "${PORT:-8000}:8000"
+
+volumes:
+  graph:
